@@ -62,7 +62,7 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train")
     image_features = pl.read_parquet(
         "data/features/features_image_cluster.parquet")
 
-    for i in range(2):
+    for i in range(4):
         df_candidate = df_candidate.join(
             image_features, how="left", left_on=f"yad_no_{i+1}", right_on="yad_no")
         df_candidate = df_candidate.rename(
@@ -77,14 +77,32 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train")
     df_candidate = df_candidate.with_columns([
         pl.col(f"{col}_cand").cast(pl.Int8) for col in image_features.columns if col != "yad_no"])
 
+    ## make image category matching features which means:
+    ## if both {image_features.columns}_{1,2, 3, 4} and {image_features.columns}_cand are positive then 1 else 0
+    for i in range(4):
+        for col in image_features.columns:
+            if col != "yad_no":
+                df_candidate = df_candidate.with_columns(
+                    (pl.col(f"{col}_{i+1}") - pl.col(f"{col}_cand")
+                     ).cast(pl.Int8).alias(f"{col}_{i+1}_match")
+                )
+
+    # drop raw image features
+    df_candidate = df_candidate.drop(
+        [f"{col}_{i+1}" for col in image_features.columns for i in range(4) if col != "yad_no"])
+    df_candidate = df_candidate.drop(
+        [f"{col}_cand" for col in image_features.columns if col != "yad_no"])
+
     # make feature in discussion
-    feature_name_list = ['latest_next_booking_top20',
-                         'past_view_yado',
-                         # 'top10_popular_yado',
-                         # 'top10_wid_popular_yado',
-                         'top10_ken_popular_yado',
-                         'top10_lrg_popular_yado',
-                         'top10_sml_popular_yado']
+    feature_name_list = [
+        # 'latest_next_booking_top20',
+        'past_view_yado',
+        # 'top10_popular_yado',
+        # 'top10_wid_popular_yado',
+        'top10_ken_popular_yado',
+        'top10_lrg_popular_yado',
+        'top10_sml_popular_yado'
+    ]
 
     for feature_name in tqdm(feature_name_list):
         print(feature_name)
@@ -117,6 +135,18 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train")
                 df_candidate = df_candidate.join(feature, how='left', left_on=[
                                                  'yad_no_cand'], right_on=['yad_no'])
 
+    df_candidate.with_columns([
+        # pl.col("latest_next_booking_rank").cast(pl.Int8),
+        pl.col("max_seq_no").cast(pl.Int8),
+        pl.col("max_seq_no_diff").cast(pl.Int8),
+        pl.col("session_view_count").cast(pl.Int8),
+        pl.col("popular_ken_cd_rank").cast(pl.Int32),
+        pl.col("popular_lrg_cd_rank").cast(pl.Int32),
+        pl.col("popular_sml_cd_rank").cast(pl.Int32),
+    ])
+
+    df_candidate = df_candidate.with_columns([
+        pl.col(f"total_room_cnt_{i+1}").cast(pl.Int16) for i in range(4)])
 
     # drop many category columns
     for i in range(4):

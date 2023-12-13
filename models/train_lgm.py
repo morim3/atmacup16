@@ -72,6 +72,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
     # define cv
     oof = np.zeros(len(X))
     feature_importances = []
+    models = []
     for fold_id in range(n_fold):
         print("fold: ", fold_id)
         # get train data
@@ -101,8 +102,13 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         callbacks = [
             lgb.log_evaluation(100),
             lgb.early_stopping(20),
-            wandb_callback(),
         ]
+
+        if logger is not None:
+            callbacks.append(
+                wandb_callback()
+            )
+
         print("train_lgb")
         model = lgb.train(
             config["lgb_params"],
@@ -111,6 +117,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
             num_boost_round=config["num_boost_round"],
             callbacks=callbacks,
         )
+        models.append(model)
 
         oof[valid_index] = model.predict(X_valid)
 
@@ -148,7 +155,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         })
         log_summary(model, save_model_checkpoint=True)
 
-    return model, oof
+    return models, oof
 
 
 def create_top_10_yad_predict(_df):
@@ -162,7 +169,7 @@ def create_top_10_yad_predict(_df):
     return out_df
 
 
-def predict(X, model):
+def predict(X, models):
     '''
     X: pl.DataFrame
         session_id, seq_no, yad_no, yad_no_0, yad_no_1, ..., yad_no_9
@@ -172,7 +179,12 @@ def predict(X, model):
     X = X.drop(["session_id", "seq_no", "yad_no_cand",
                "1", "2", "3", "4"]).to_pandas()
     X = specify_dtype(X)
-    return model.predict(X)
+
+    prediction = []
+    for model in models:
+        prediction.append(model.predict(X))
+
+    return np.mean(prediction)
 
 
 if __name__ == '__main__':
@@ -225,16 +237,15 @@ if __name__ == '__main__':
     else:
         logger = None
 
-    config["num_boost_round"] = 10000
+    config["num_boost_round"] = 1
     # train
-    model, oof = train_lgm(
+    models, oof = train_lgm(
         train_X, train_y, config, n_fold=5, seed=42, logger=logger, train_label=train_label)
 
-    del train_X, train_y
+    del train_X, train_y, oof
     gc.collect()
     # predict
-    print("start prediction")
-    pred = predict(test_X, model)
+    pred = predict(test_X, models)
     sub = create_top_10_yad_predict(pd.DataFrame({
         'session_id': test_X['session_id'],
         'yad_no': test_X['yad_no_cand'],

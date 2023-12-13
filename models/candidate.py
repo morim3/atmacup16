@@ -13,18 +13,14 @@ def create_past_view_yado_candidates(log):
     max_seq_no = log.group_by("session_id").agg(
         pl.max("seq_no").alias("max_seq_no"))
     log = log.join(max_seq_no, on="session_id")
-    # 最大値に該当する行を除外する
     past_yado_candidates = log.filter(pl.col("seq_no") != pl.col("max_seq_no"))
     past_yado_candidates = past_yado_candidates.select(
         ['session_id', 'yad_no']).unique()
 
-    # 簡易的な特徴量も作成しておく。
-    # 何個前に見たか 複数回見た時は、直近のみ残す。
     past_yado_feature = log.with_columns((pl.col('max_seq_no') - pl.col('seq_no')).alias(
         'max_seq_no_diff')).filter(pl.col("seq_no") != pl.col("max_seq_no"))
     past_yado_feature = past_yado_feature.join(past_yado_feature.group_by(["session_id", "yad_no"]).agg(
         pl.col("max_seq_no_diff").max().alias("max_seq_no_diff")), on=["session_id", "yad_no", "max_seq_no_diff"])
-    # 何回見たか
     session_view_count = log.group_by(['session_id', 'yad_no']).count().rename({
         'count': 'session_view_count'})
     past_yado_feature = past_yado_feature.join(session_view_count, how='left', on=[
@@ -59,7 +55,7 @@ def create_topN_popular_yado_candidates(label, fold_num, train_test='train', top
                 pl.arange(1, len(popular_yado_sort)+1).alias('popular_rank'))
             popular_yado_feature = pl.concat(
                 [popular_yado_feature, popular_yado_feature_fold])
-    else:  # testデータはtrainデータ全体で作成する。
+    else:  
         # candidateの作成
         popular_yado_sort = label['yad_no'].value_counts().sort(
             by='counts', descending=True)
@@ -255,15 +251,14 @@ def candidate_20231211(fold_num=5):
     yado = loader.load_yado()
     label = loader.load_cv_label()
 
-    session_candidate_name_list = ['past_view_yado',
-                                   ]
+    session_candidate_name_list = ['past_view_yado']
 
     yado_candidate_name_list = [
         'latest_next_booking_top20'
     ]
     top10_area_candidate_name_list = [
-        # "sml",
-        # "lrg",
+        "sml",
+        "lrg",
         # "ken"
         # "wid"
         # 'top10_popular_yado',
@@ -273,11 +268,11 @@ def candidate_20231211(fold_num=5):
         # 'top10_sml_popular_yado',
     ]
 
-    train_session_id = get_session_id_list(train_log)
-    train_session_id = train_session_id.join(label.select(
-        ['fold', 'session_id']), how='left', on='session_id')
+    # train_session_id = get_session_id_list(train_log)
+    # train_session_id = train_session_id.join(label.select(
+    #     ['fold', 'session_id']), how='left', on='session_id')
+    # test_session_id = get_session_id_list(test_log)
 
-    test_session_id = get_session_id_list(test_log)
 
     # session candidate
     for train_test in ['train', 'test']:
@@ -308,6 +303,7 @@ def candidate_20231211(fold_num=5):
             candidate_list.append(
                 candidate.select(['session_id', 'yad_no']))
 
+
         # area candidate
         for area_name in tqdm(top10_area_candidate_name_list):
             area_cd = area_name + '_cd'
@@ -315,23 +311,17 @@ def candidate_20231211(fold_num=5):
                 f'data/candidates/{train_test}_top10_{area_name}_popular_yado_candidates.parquet')
             if train_test == 'train':
                 candidate_all = pl.DataFrame()
-                train_areas = train_log.join(yado.select(['yad_no', area_cd,]), how='left', on='yad_no').select(
-                    ['session_id', area_cd]).unique(["session_id", area_cd]).join(train_session_id, on="session_id", how="left").select(["session_id", area_cd, "fold"])
-
                 for fold in range(fold_num):
-                    train_areas_fold = train_areas.filter(
-                        pl.col('fold') == fold)
-                    candidate_fold = train_areas_fold.join(
-                        candidate.filter(pl.col('fold') == fold), how='cross', on=area_cd).select(["session_id", "yad_no"])
-
-                    candidate_all = pl.concat(
-                        [candidate_all, candidate_fold])
+                    train_areas = train_log.join(yado[["yad_no", area_cd]], on = "yad_no", how = "left").sort("seq_no", descending=True).join(label[["session_id", "fold"]], on="session_id", how="left").filter(pl.col('fold') == fold)
+                    train_areas = train_areas.unique(["session_id", area_cd])[["session_id", area_cd]]
+                    candidate_fold = train_areas.join(candidate, how="left", on=area_cd)[["session_id", "yad_no"]]
+                    candidate_all = pl.concat([candidate_all, candidate_fold])
 
             else:
                 test_areas = test_log.join(yado.select(['yad_no', area_cd,]), how='left', on='yad_no').select(
                     ['session_id', area_cd]).unique(["session_id", area_cd])
                 candidate_all = test_areas.join(
-                    candidate, how='cross', on=area_cd).select(["session_id", "yad_no"])
+                    candidate, how='left', on=area_cd).select(["session_id", "yad_no"])
 
             candidate_list.append(
                 candidate_all
@@ -342,7 +332,7 @@ def candidate_20231211(fold_num=5):
         candidate = pl.concat(candidate_list).unique()
 
         candidate.write_parquet(
-            f'data/candidates/{train_test}_candidate_20231211.parquet')
+            f'data/candidates/{train_test}_candidate_20231213.parquet')
 
         del candidate
         gc.collect()

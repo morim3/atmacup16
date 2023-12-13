@@ -3,7 +3,9 @@ lgb_params:
   'objective': 'binary'
   'metric': 'auc'
   'boosting_type' : 'gbdt'
-  'learning_rate': 0.2 
+  'learning_rate': 0.1 
   'seed': 42
+  # 'verbosity': 5
+
 
 

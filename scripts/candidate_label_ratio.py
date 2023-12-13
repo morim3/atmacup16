@@ -6,8 +6,8 @@ from tools import data_loader
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--candidate_train_tstamp", type=str, default="20231211")
-    parser.add_argument("--candidate_test_tstamp", type=str, default="20231211")
+    parser.add_argument("--candidate_train_tstamp", type=str, default="20231213")
+    parser.add_argument("--candidate_test_tstamp", type=str, default="20231213")
     args = parser.parse_args()
 
     loader = data_loader.AtmaData16Loader()

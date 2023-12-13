@@ -9,3 +9,4 @@ polars
 tqdm
 notebook
 lightgbm
+gensim

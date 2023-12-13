@@ -73,5 +73,8 @@ class AtmaData16Loader:
     def load_sample_submission(self, frame_type: DfType = "pl") -> DataFrame:
         return self._load_parquet(self.input_dir / "sample_submission.parquet", frame_type)
 
+    def load_image_features(self, frame_type: DfType = "pl") -> DataFrame:
+        return self._load_parquet(self.input_dir / "image_embeddings.parquet", frame_type)
+
 
 

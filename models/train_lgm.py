@@ -73,6 +73,9 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
     oof = np.zeros(len(X))
     feature_importances = []
     models = []
+
+    use_session_ids = y.group_by('session_id').agg(pl.col('label').sum()).filter(pl.col('label') == 1)['session_id']
+
     for fold_id in range(n_fold):
         print("fold: ", fold_id)
         # get train data
@@ -80,10 +83,10 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         y_index = y.with_columns(
             pl.arange(0, pl.count(), ).alias("index")
         )
-        valid_index = y_index.filter(pl.col("fold") == fold_id)[
-            "index"].to_list()
-        X_train, X_valid = X[valid_index], X[valid_index]
-        y_train, y_valid = y[valid_index], y[valid_index]
+        valid_index = y_index.filter(pl.col("fold") == fold_id)[ "index"].to_list()
+        train_index = y_index.filter(pl.col("fold") != fold_id & (pl.col('session_id').is_in(use_session_ids)))[ "index"].to_list()
+        X_train, X_valid = X[train_index], X[valid_index]
+        y_train, y_valid = y[train_index], y[valid_index]
 
         X_train = X_train.drop(
             ["session_id", "seq_no", "yad_no_cand"]).to_pandas()
@@ -101,7 +104,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
 
         callbacks = [
             lgb.log_evaluation(100),
-            lgb.early_stopping(20),
+            lgb.early_stopping(200),
         ]
 
         if logger is not None:
@@ -184,7 +187,8 @@ def predict(X, models):
     for model in models:
         prediction.append(model.predict(X))
 
-    return np.mean(prediction)
+    print(np.stack(prediction, axis=-1).shape)
+    return np.mean(np.stack(prediction, axis=-1), axis=-1)
 
 
 if __name__ == '__main__':
@@ -197,21 +201,21 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
 
-    # parser.add_argument(
-    #     "--train_x_path", default="data/features/X_train_20231211_20231212185056.parquet")
-    # parser.add_argument(
-    #     "--train_y_path", default="data/features/X_test_20231211_20231212185056.parquet")
-    # parser.add_argument(
-    #     "--test_x_path", default="data/features/y_train_20231211_20231212185056.parquet")
+    parser.add_argument(
+        "--train_x_path", default=None)
+    parser.add_argument(
+        "--train_y_path", default=None)
+    parser.add_argument(
+        "--test_x_path", default=None)
     parser.add_argument("--config_path", default="models/config_default.yml")
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--log_name", default="default")
-    parser.add_argument("--latest", action="store_true")
     parser.add_argument("--latest_path", default="data/features/latest.yaml")
+    parser.add_argument("--num_boost_round", default=10000, type=int)
 
     args = parser.parse_args()
 
-    if not args.latest:
+    if args.train_x_path is not None:
         train_X = pl.read_parquet(args.train_x_path)
         train_y = pl.read_parquet(args.train_y_path)
         test_X = pl.read_parquet(args.test_x_path)
@@ -237,14 +241,14 @@ if __name__ == '__main__':
     else:
         logger = None
 
-    config["num_boost_round"] = 1
+    config["num_boost_round"] = args.num_boost_round
     # train
     models, oof = train_lgm(
         train_X, train_y, config, n_fold=5, seed=42, logger=logger, train_label=train_label)
 
     del train_X, train_y, oof
     gc.collect()
-    # predict
+
     pred = predict(test_X, models)
     sub = create_top_10_yad_predict(pd.DataFrame({
         'session_id': test_X['session_id'],

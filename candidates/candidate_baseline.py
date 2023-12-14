@@ -55,7 +55,7 @@ def create_topN_popular_yado_candidates(label, fold_num, train_test='train', top
                 pl.arange(1, len(popular_yado_sort)+1).alias('popular_rank'))
             popular_yado_feature = pl.concat(
                 [popular_yado_feature, popular_yado_feature_fold])
-    else:  
+    else:
         # candidateの作成
         popular_yado_sort = label['yad_no'].value_counts().sort(
             by='counts', descending=True)
@@ -174,8 +174,16 @@ def make_candidate(train_log, test_log, label, yado, fold_num=5):
         train_log)
     test_past_view_yado_candidates, test_past_view_yado_feature = create_past_view_yado_candidates(
         test_log)
-    # train_top10_popular_yado_candidates,train_top10_popular_yado_feature = create_topN_popular_yado_candidates(label,yado, fold_num=fold_num, train_test='train',top=20)
-    # test_top10_popular_yado_candidates,test_top10_popular_yado_feature = create_topN_popular_yado_candidates(label,yado, fold_num=fold_num, train_test='test',top=10)
+    train_top20_popular_yado_candidates, train_top20_popular_yado_feature = create_topN_popular_yado_candidates(
+        label, fold_num=fold_num, train_test='train', top=20)
+    test_top20_popular_yado_candidates, test_top20_popular_yado_feature = create_topN_popular_yado_candidates(
+        label, fold_num=fold_num, train_test='test', top=20)
+
+    train_top10_wid_popular_yado_candidates, train_top10_wid_popular_yado_feature = create_topN_area_popular_yado_candidates(
+        label, yado, fold_num=fold_num, train_test='train', area='wid_cd', top=10)
+    test_top10_wid_popular_yado_candidates, test_top10_wid_popular_yado_feature = create_topN_area_popular_yado_candidates(
+        label, yado, fold_num=fold_num, train_test='test', area='wid_cd', top=10)
+
     train_top10_ken_popular_yado_candidates, train_top10_ken_popular_yado_feature = create_topN_area_popular_yado_candidates(
         label, yado, fold_num=fold_num, train_test='train', area='ken_cd', top=10)
     test_top10_ken_popular_yado_candidates, test_top10_ken_popular_yado_feature = create_topN_area_popular_yado_candidates(
@@ -201,6 +209,14 @@ def make_candidate(train_log, test_log, label, yado, fold_num=5):
         'data/candidates/train_past_view_yado_candidates.parquet')
     test_past_view_yado_candidates.write_parquet(
         'data/candidates/test_past_view_yado_candidates.parquet')
+    train_top20_popular_yado_candidates.write_parquet(
+        'data/candidates/train_top20_popular_yado_candidates.parquet')
+    test_top20_popular_yado_candidates.write_parquet(
+        'data/candidates/test_top20_popular_yado_candidates.parquet')
+    train_top10_wid_popular_yado_candidates.write_parquet(
+        'data/candidates/train_top10_wid_popular_yado_candidates.parquet')
+    test_top10_wid_popular_yado_candidates.write_parquet(
+        'data/candidates/test_top10_wid_popular_yado_candidates.parquet')
     train_top10_ken_popular_yado_candidates.write_parquet(
         'data/candidates/train_top10_ken_popular_yado_candidates.parquet')
     test_top10_ken_popular_yado_candidates.write_parquet(
@@ -222,6 +238,14 @@ def make_candidate(train_log, test_log, label, yado, fold_num=5):
         'data/features/train_past_view_yado_feature.parquet')
     test_past_view_yado_feature.write_parquet(
         'data/features/test_past_view_yado_feature.parquet')
+    train_top20_popular_yado_feature.write_parquet(
+        'data/features/train_top20_popular_yado_feature.parquet')
+    test_top20_popular_yado_feature.write_parquet(
+        'data/features/test_top20_popular_yado_feature.parquet')
+    train_top10_wid_popular_yado_feature.write_parquet(
+        'data/features/train_top10_wid_popular_yado_feature.parquet')
+    test_top10_wid_popular_yado_feature.write_parquet(
+        'data/features/test_top10_wid_popular_yado_feature.parquet')
     train_top10_ken_popular_yado_feature.write_parquet(
         'data/features/train_top10_ken_popular_yado_feature.parquet')
     test_top10_ken_popular_yado_feature.write_parquet(
@@ -251,32 +275,44 @@ def candidate_20231211(fold_num=5):
     yado = loader.load_yado()
     label = loader.load_cv_label()
 
-    session_candidate_name_list = ['past_view_yado']
+    cross_join_candidate_name_list = [
+        'top20_popular_yado',
+    ]
+    session_candidate_name_list = ['past_view_yado',
+                                   ]
 
     yado_candidate_name_list = [
         'latest_next_booking_top20'
     ]
     top10_area_candidate_name_list = [
-        "sml",
-        "lrg",
+        # "sml",
+        # "lrg",
         # "ken"
         # "wid"
-        # 'top10_popular_yado',
-        # 'top10_wid_popular_yado',
-        # 'top10_ken_popular_yado',
-        # 'top10_lrg_popular_yado',
-        # 'top10_sml_popular_yado',
     ]
 
-    # train_session_id = get_session_id_list(train_log)
-    # train_session_id = train_session_id.join(label.select(
-    #     ['fold', 'session_id']), how='left', on='session_id')
-    # test_session_id = get_session_id_list(test_log)
-
+    train_session_id = get_session_id_list(train_log)
+    train_session_id = train_session_id.join(label.select(
+        ['fold', 'session_id']), how='left', on='session_id')
+    test_session_id = get_session_id_list(test_log)
 
     # session candidate
     for train_test in ['train', 'test']:
         candidate_list = []
+        for candidate_name in tqdm(cross_join_candidate_name_list):
+            candidate = pl.read_parquet(
+                f'data/candidates/{train_test}_{candidate_name}_candidates.parquet')
+            if train_test == "train":
+                candidate_all = pl.DataFrame()
+                for fold in range(fold_num):
+                    candidate_fold = train_session_id.filter(pl.col('fold') == fold).join(candidate.filter(pl.col('fold') == fold).select(['yad_no']),how='cross')
+                    candidate_all = pl.concat([candidate_all,candidate_fold])
+                candidate_list.append(candidate_all.select(['session_id', 'yad_no']))
+            else:
+                candidate_all = candidate.join(
+                    train_session_id, how='cross', on="fold")
+                candidate_list.append(candidate_all.select(['session_id', 'yad_no']))
+
         for candidate_name in tqdm(session_candidate_name_list):
             candidate = pl.read_parquet(
                 f'data/candidates/{train_test}_{candidate_name}_candidates.parquet')
@@ -303,7 +339,6 @@ def candidate_20231211(fold_num=5):
             candidate_list.append(
                 candidate.select(['session_id', 'yad_no']))
 
-
         # area candidate
         for area_name in tqdm(top10_area_candidate_name_list):
             area_cd = area_name + '_cd'
@@ -312,9 +347,12 @@ def candidate_20231211(fold_num=5):
             if train_test == 'train':
                 candidate_all = pl.DataFrame()
                 for fold in range(fold_num):
-                    train_areas = train_log.join(yado[["yad_no", area_cd]], on = "yad_no", how = "left").sort("seq_no", descending=True).join(label[["session_id", "fold"]], on="session_id", how="left").filter(pl.col('fold') == fold)
-                    train_areas = train_areas.unique(["session_id", area_cd])[["session_id", area_cd]]
-                    candidate_fold = train_areas.join(candidate, how="left", on=area_cd)[["session_id", "yad_no"]]
+                    train_areas = train_log.join(yado[["yad_no", area_cd]], on="yad_no", how="left").sort("seq_no", descending=True).join(
+                        label[["session_id", "fold"]], on="session_id", how="left").filter(pl.col('fold') == fold)
+                    train_areas = train_areas.unique(["session_id", area_cd])[
+                        ["session_id", area_cd]]
+                    candidate_fold = train_areas.join(candidate, how="left", on=area_cd)[
+                        ["session_id", "yad_no"]]
                     candidate_all = pl.concat([candidate_all, candidate_fold])
 
             else:
@@ -332,7 +370,7 @@ def candidate_20231211(fold_num=5):
         candidate = pl.concat(candidate_list).unique()
 
         candidate.write_parquet(
-            f'data/candidates/{train_test}_candidate_20231213.parquet')
+            f'data/candidates/{train_test}_candidate_baseline.parquet')
 
         del candidate
         gc.collect()

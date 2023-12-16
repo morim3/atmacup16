@@ -43,6 +43,7 @@ def specify_dtype(df, ):
     return df
 
 
+
 def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
     '''
     X: pl.DataFrame
@@ -68,13 +69,14 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         # get wandb logger
         logger.log(config)
 
-    print("features", X.columns)
     # define cv
     oof = np.zeros(len(X))
     feature_importances = []
     models = []
 
-    use_session_ids = y.group_by('session_id').agg(pl.col('label').sum()).filter(pl.col('label') == 1)['session_id']
+
+    use_session_ids = y.filter(pl.col('label') == 1).unique(
+        "session_id")['session_id']
 
     for fold_id in range(n_fold):
         print("fold: ", fold_id)
@@ -83,17 +85,23 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         y_index = y.with_columns(
             pl.arange(0, pl.count(), ).alias("index")
         )
-        valid_index = y_index.filter(pl.col("fold") == fold_id)[ "index"].to_list()
-        train_index = y_index.filter(pl.col("fold") != fold_id & (pl.col('session_id').is_in(use_session_ids)))[ "index"].to_list()
+        # valid_index = y_index.filter(pl.col("fold") == fold_id & (pl.col('session_id').is_in(use_session_ids)))["index"].to_list()
+        # valid_index = y_index.filter(pl.col("fold") == fold_id & ~(
+        #     pl.col('session_id').is_in(use_session_ids)))["index"].to_list()
+        valid_index = y_index.filter(pl.col("fold") == fold_id)["index"].to_list()
+        train_index = y_index.filter(pl.col("fold") != fold_id & (
+            pl.col('session_id').is_in(use_session_ids)))["index"].to_list()
         X_train, X_valid = X[train_index], X[valid_index]
         y_train, y_valid = y[train_index], y[valid_index]
+
 
         X_train = X_train.drop(
             ["session_id", "seq_no", "yad_no_cand"]).to_pandas()
         X_valid = X_valid.drop(
             ["session_id", "seq_no", "yad_no_cand"]).to_pandas()
         y_train, y_valid = y_train.select(
-            ["label"]).to_pandas(), y_valid.select(["label"]).to_pandas()
+            ["label"]).to_numpy(), y_valid.select(["label"]).to_numpy()
+
 
         X_train = specify_dtype(X_train)
         X_valid = specify_dtype(X_valid)
@@ -104,7 +112,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
 
         callbacks = [
             lgb.log_evaluation(100),
-            lgb.early_stopping(200),
+            lgb.early_stopping(50),
         ]
 
         if logger is not None:
@@ -187,7 +195,6 @@ def predict(X, models):
     for model in models:
         prediction.append(model.predict(X))
 
-    print(np.stack(prediction, axis=-1).shape)
     return np.mean(np.stack(prediction, axis=-1), axis=-1)
 
 
@@ -242,6 +249,8 @@ if __name__ == '__main__':
         logger = None
 
     config["num_boost_round"] = args.num_boost_round
+
+    print(list(zip(train_X.dtypes, list(train_X.columns))))
     # train
     models, oof = train_lgm(
         train_X, train_y, config, n_fold=5, seed=42, logger=logger, train_label=train_label)

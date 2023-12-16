@@ -310,7 +310,7 @@ def candidate_20231211(fold_num=5):
                 candidate_list.append(candidate_all.select(['session_id', 'yad_no']))
             else:
                 candidate_all = candidate.join(
-                    train_session_id, how='cross', on="fold")
+                    test_session_id, how='cross', on="fold")
                 candidate_list.append(candidate_all.select(['session_id', 'yad_no']))
 
         for candidate_name in tqdm(session_candidate_name_list):

@@ -164,12 +164,17 @@ if __name__ == "__main__":
     train_co_visit_matrix = generate_co_visit_matrix(train_log)
     test_co_visit_matrix = generate_co_visit_matrix(test_log)
 
+
     train_co_visit_matrix = train_co_visit_matrix.rename({'yad_no':'latest_yad_no','candidate_yad_no':'yad_no'})
     test_co_visit_matrix = test_co_visit_matrix.rename({'yad_no':'latest_yad_no','candidate_yad_no':'yad_no'})
+
     train_co_visit_matrix_top10_candidate = train_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(10)
     test_co_visit_matrix_top10_candidate = test_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(10)
 
     print(train_co_visit_matrix_top10_candidate)
+
+    train_co_visit_matrix.write_parquet('data/features/train_covisit_features.parquet')
+    test_co_visit_matrix.write_parquet('data/features/test_covisit_features.parquet')
     train_co_visit_matrix_top10_candidate.write_parquet('data/candidates/train_covisit_top10_candidates.parquet')
     test_co_visit_matrix_top10_candidate.write_parquet('data/candidates/test_covisit_top10_candidates.parquet')
 

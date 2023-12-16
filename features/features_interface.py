@@ -5,6 +5,7 @@ import pandas as pd
 import polars as pl
 from tqdm import tqdm
 import yaml
+import gc
 
 from tools import data_loader
 
@@ -56,49 +57,62 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
 
     # make matching features which means:
     # if {yad.columns}_{1,..,4} == {yad.columns}_cand then 1 else 0
-    for i in range(n_pivot):
-        for col in df_yad.columns:
-            df_candidate = df_candidate.with_columns(
-                (pl.col(f"{col}_{i+1}") == pl.col(f"{col}_cand")
-                 ).cast(pl.Int8).alias(f"{col}_{i+1}_match")
-            )
+    n_pivot_matching = 4
+    for i in range(n_pivot_matching):
+        # for col in df_yad.columns:
+        for col in ["yad_no"]:
+            if col != "total_room_cnt":
+                df_candidate = df_candidate.with_columns(
+                    (pl.col(f"{col}_{i+1}") == pl.col(f"{col}_cand")
+                     ).cast(pl.Int8).alias(f"{col}_{i+1}_match")
+                )
 
     # ## sum matching features
-    for col in df_yad.columns:
-        sum_col = sum([pl.col(f"{col}_{i+1}_match")
-                      for i in range(0, n_pivot)])
-        df_candidate = df_candidate.with_columns(
-            sum_col.cast(pl.Int8).alias(f"{col}_match_sum")
-        )
+    # matching = (df_log.join(df_candidate, how="left", left_on="session_id", right_on="session_id")
+    #     .join(df_yad, how="left", left_on="yad_no_cand", right_on="yad_no")
+    #     .join(df_yad, how="left", on="yad_no",))
+    # for col in df_yad.columns:
+    #     if col != "total_room_cnt" and col!="yad_no":
+    #         sum_match = (
+    #             matching.filter(pl.col(f"{col}") == pl.col(f"{col}_right"))
+    #             .groupby(["session_id", "yad_no_cand"])
+    #             .agg(pl.sum(f"{col}").alias(f"{col}_sum_match"))[["session_id", "yad_no_cand", f"{col}_sum_match"]]
+    #         )
+    #         df_candidate = df_candidate.join(
+    #             sum_match, how="left", left_on=["session_id", "yad_no_cand"], right_on=["session_id", "yad_no_cand"])
+    #
+    # for col in ["yad_no"]:
+    #     sum_odd = (
+    #         matching
+    #         .filter(pl.col(f"{col}") == pl.col(f"{col}_right"))
+    #         .filter(pl.col(f"seq_no") % 2 == 1)
+    #         .groupby(["session_id", "yad_no_cand"])
+    #         .agg(pl.sum(f"{col}").alias(f"{col}_sum_odd"))[["session_id", "yad_no_cand", f"{col}_sum_odd"]]
+    #     )
+    #     df_candidate = df_candidate.join(
+    #         sum_odd, how="left", left_on=["session_id", "yad_no_cand"], right_on=["session_id", "yad_no_cand"])
 
-    for col in ["yad_no"]:
-        sum_col = sum([pl.col(f"{col}_{i+1}_match")
-                      for i in range(1, n_pivot, 2)])
-        df_candidate = df_candidate.with_columns(
-            sum_col.cast(pl.Int8).alias(f"{col}_match_sum_odd")
-        )
-
-    # cat image features
-    image_features = pl.read_parquet(
-        "data/features/features_image_cluster.parquet")
-
-    for i in range(n_pivot):
-        df_candidate = df_candidate.join(
-            image_features, how="left", left_on=f"yad_no_{i+1}", right_on="yad_no")
-        df_candidate = df_candidate.rename(
-            {f"{col}": f"{col}_{i+1}" for col in image_features.columns if col != "yad_no"})
-        df_candidate = df_candidate.with_columns([
-            pl.col(f"{col}_{i+1}").cast(pl.Int8) for col in image_features.columns if col != "yad_no"])
-
-    df_candidate = df_candidate.join(
-        image_features, how="left", left_on="yad_no_cand", right_on="yad_no", suffix="_cand")
-    df_candidate = df_candidate.rename(
-        {f"{col}": f"{col}_cand" for col in image_features.columns if col != "yad_no"})
-    df_candidate = df_candidate.with_columns([
-        pl.col(f"{col}_cand").cast(pl.Int8) for col in image_features.columns if col != "yad_no"])
-
-    # make image category matching features which means:
-    # if both {image_features.columns}_{1,2, 3, 4} and {image_features.columns}_cand are positive then 1 else 0
+    # # cat image features
+    # image_features = pl.read_parquet(
+    #     "data/features/features_image_cluster.parquet")
+    #
+    # for i in range(n_pivot):
+    #     df_candidate = df_candidate.join(
+    #         image_features, how="left", left_on=f"yad_no_{i+1}", right_on="yad_no")
+    #     df_candidate = df_candidate.rename(
+    #         {f"{col}": f"{col}_{i+1}" for col in image_features.columns if col != "yad_no"})
+    #     df_candidate = df_candidate.with_columns([
+    #         pl.col(f"{col}_{i+1}").cast(pl.Int8) for col in image_features.columns if col != "yad_no"])
+    #
+    # df_candidate = df_candidate.join(
+    #     image_features, how="left", left_on="yad_no_cand", right_on="yad_no", suffix="_cand")
+    # df_candidate = df_candidate.rename(
+    #     {f"{col}": f"{col}_cand" for col in image_features.columns if col != "yad_no"})
+    # df_candidate = df_candidate.with_columns([
+    #     pl.col(f"{col}_cand").cast(pl.Int8) for col in image_features.columns if col != "yad_no"])
+    #
+    # # make image category matching features which means:
+    # # if both {image_features.columns}_{1,2, 3, 4} and {image_features.columns}_cand are positive then 1 else 0
     # for i in range(1):
     #     for col in image_features.columns:
     #         if col != "yad_no":
@@ -106,46 +120,46 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
     #                 (pl.col(f"{col}_{i+1}") * pl.col(f"{col}_cand")
     #                  ).cast(pl.Int8).alias(f"{col}_{i+1}_match")
     #             )
-
+    #
     # ## area embedding matching features
 
-    for area in ["lrg_cd", "sml_cd"]:
-        cd_emb = pl.read_parquet(
-            f"data/item2vec/area_emb_{area}.parquet")
-
-        df_candidate = df_candidate.join(
-            cd_emb, how="left", left_on=f"{area}_cand", right_on="area")
-        df_candidate = df_candidate.rename(
-            {f"{col}": f"{col}_{area}_cand" for col in cd_emb.columns if col != "area"})
-        df_candidate = df_candidate.with_columns([
-            pl.col(f"{col}_{area}_cand").cast(pl.Float32) for col in cd_emb.columns if col != "area"])
-
-        for i in range(n_pivot):
-            df_candidate = df_candidate.join(
-                cd_emb, how="left", left_on=f"{area}_{i+1}", right_on={"area"})
-            df_candidate = df_candidate.rename(
-                {f"{col}": f"{col}_{area}_{i+1}" for col in cd_emb.columns if col != "area"})
-            df_candidate = df_candidate.with_columns([
-                pl.col(f"{col}_{area}_{i+1}").cast(pl.Float32) for col in cd_emb.columns if col != "area"])
-            # cosin similarity
-            # col_prod = [sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") * pl.col(f"area_emb_{j+1}_{area}_cand") for j in range(5)]).cast(pl.Float32).alias(f"area_emb_inner_{area}_{i+1}")]
-            col_sim = [(sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") * pl.col(f"area_emb_{j+1}_{area}_cand") for j in range(5)]) / sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}")
-                                                                                                                                       ** 2 for j in range(5)]) ** 0.5 / sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") ** 2 for j in range(5)]) ** 0.5).cast(pl.Float32).alias(f"{area}_emb_sim_{i+1}")]
-            df_candidate = df_candidate.with_columns(
-                col_sim
-            )
-
-            # # check added column
-            # for col in df_candidate.columns:
-            #     if col.startswith(f"{area}_emb_sim_{i}"):
-            #         print(df_candidate.select(col))
-
-        #   drop
-        df_candidate = df_candidate.drop(
-            [f"area_emb_{j+1}_{area}_{i+1}" for j in range(5) for i in range(n_pivot)])
-        df_candidate = df_candidate.drop(
-            [f"area_emb_{j+1}_{area}_cand" for j in range(5)])
-
+    # for area in ["lrg_cd", "sml_cd"]:
+    #     cd_emb = pl.read_parquet(
+    #         f"data/item2vec/area_emb_{area}.parquet")
+    #
+    #     df_candidate = df_candidate.join(
+    #         cd_emb, how="left", left_on=f"{area}_cand", right_on="area")
+    #     df_candidate = df_candidate.rename(
+    #         {f"{col}": f"{col}_{area}_cand" for col in cd_emb.columns if col != "area"})
+    #     df_candidate = df_candidate.with_columns([
+    #         pl.col(f"{col}_{area}_cand").cast(pl.Float32) for col in cd_emb.columns if col != "area"])
+    #
+    #     for i in range(n_pivot):
+    #         df_candidate = df_candidate.join(
+    #             cd_emb, how="left", left_on=f"{area}_{i+1}", right_on={"area"})
+    #         df_candidate = df_candidate.rename(
+    #             {f"{col}": f"{col}_{area}_{i+1}" for col in cd_emb.columns if col != "area"})
+    #         df_candidate = df_candidate.with_columns([
+    #             pl.col(f"{col}_{area}_{i+1}").cast(pl.Float32) for col in cd_emb.columns if col != "area"])
+    #         # cosin similarity
+    #         # col_prod = [sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") * pl.col(f"area_emb_{j+1}_{area}_cand") for j in range(5)]).cast(pl.Float32).alias(f"area_emb_inner_{area}_{i+1}")]
+    #         col_sim = [(sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") * pl.col(f"area_emb_{j+1}_{area}_cand") for j in range(5)]) / sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}")
+    #                                                                                                                                    ** 2 for j in range(5)]) ** 0.5 / sum([pl.col(f"area_emb_{j+1}_{area}_{i+1}") ** 2 for j in range(5)]) ** 0.5).cast(pl.Float32).alias(f"{area}_emb_sim_{i+1}")]
+    #         df_candidate = df_candidate.with_columns(
+    #             col_sim
+    #         )
+    #
+    #         # # check added column
+    #         # for col in df_candidate.columns:
+    #         #     if col.startswith(f"{area}_emb_sim_{i}"):
+    #         #         print(df_candidate.select(col))
+    #
+    #     #   drop
+    #     df_candidate = df_candidate.drop(
+    #         [f"area_emb_{j+1}_{area}_{i+1}" for j in range(5) for i in range(n_pivot)])
+    #     df_candidate = df_candidate.drop(
+    #         [f"area_emb_{j+1}_{area}_cand" for j in range(5)])
+    #
     #
     # # sum matching features
     # for col in image_features.columns:
@@ -155,35 +169,35 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
     #         df_candidate = df_candidate.with_columns(
     #             sum_col.cast(pl.Int8).alias(f"{col}_match_sum")
     #         )
-    # drop raw image features
-    df_candidate = df_candidate.drop(
-        [f"{col}_{i+1}" for col in image_features.columns for i in range(n_pivot) if col != "yad_no"])
-    df_candidate = df_candidate.drop(
-        [f"{col}_cand" for col in image_features.columns if col != "yad_no"])
-
+    # # drop raw image features
+    # df_candidate = df_candidate.drop(
+    #     [f"{col}_{i+1}" for col in image_features.columns for i in range(n_pivot) if col != "yad_no"])
+    # df_candidate = df_candidate.drop(
+    #     [f"{col}_cand" for col in image_features.columns if col != "yad_no"])
+    #
     # session_length_each_yad
 
-    length_each_yad = pl.read_parquet(
-        "data/features/session_length_each_yad.parquet")
-
-    for i in range(n_pivot):
-        df_candidate = df_candidate.join(
-            length_each_yad, how="left", left_on=f"yad_no_{i+1}", right_on="yad_no")
-        df_candidate = df_candidate.rename(
-            {f"{col}": f"{col}_{i+1}" for col in length_each_yad.columns if col != "yad_no"})
-
-    df_candidate = df_candidate.join(
-        length_each_yad, how="left", left_on="yad_no_cand", right_on="yad_no")
-    df_candidate = df_candidate.rename(
-        {f"{col}": f"{col}_cand" for col in length_each_yad.columns if col != "yad_no"})
-
+    # length_each_yad = pl.read_parquet(
+    #     "data/features/session_length_each_yad.parquet")
+    #
+    # for i in range(2):
+    #     df_candidate = df_candidate.join(
+    #         length_each_yad, how="left", left_on=f"yad_no_{i+1}", right_on="yad_no")
+    #     df_candidate = df_candidate.rename(
+    #         {f"{col}": f"{col}_{i+1}" for col in length_each_yad.columns if col != "yad_no"})
+    #
+    # df_candidate = df_candidate.join(
+    #     length_each_yad, how="left", left_on="yad_no_cand", right_on="yad_no")
+    # df_candidate = df_candidate.rename(
+    #     {f"{col}": f"{col}_cand" for col in length_each_yad.columns if col != "yad_no"})
+    #
     # covisitation feature
 
     n_covisit_pivot = 3
 
     for i in range(n_covisit_pivot):
         covisit = pl.read_parquet(
-            f"data/candidates/{train_test}_covisit_top10_candidates.parquet")
+            f"data/features/{train_test}_covisit_features.parquet")
         df_candidate = (df_candidate.join(
             covisit, how="left", left_on=[f"yad_no_{i+1}", "yad_no_cand"], right_on=["latest_yad_no", "yad_no"]).with_columns(
             pl.col("co_visit_count").cast(pl.Int16)).rename({"co_visit_count": f"co_visit_count_{i+1}_cand"})
@@ -191,16 +205,51 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
 
     # next seq feature
     next_seq = pl.read_parquet(
-        f"data/candidates/{train_test}_next_seq_top10_candidates.parquet")
+        f"data/features/{train_test}_next_seq_features.parquet")
+    print(next_seq)
     df_candidate = (df_candidate.join(
-        next_seq, how="left", left_on=["yad_no_1", "yad_no_cand"], right_on=["latest_yad_no", "yad_no"]).with_columns(
+        next_seq, how="left", left_on=["yad_no_1", "yad_no_cand"], right_on=["yad_no", "next_yad_no"]).with_columns(
         pl.col("count").cast(pl.Int16)).rename({"count": "next_seq_count_1_cand"})
     )
 
     # make feature in discussion
+
+    # sequence number of each session
+    max_seq = df_log.group_by("session_id").agg(
+        pl.max("seq_no").alias("max_seq"))[["session_id", "max_seq"]].with_columns(pl.col("max_seq").cast(pl.Int8))
+
+    df_candidate = df_candidate.join(
+        max_seq, how="left", left_on="session_id", right_on="session_id")
+
+    # first and last appearance of candidate in log
+    first_cand_appear_seq_in_log = df_candidate.join(
+        df_log, how="inner", left_on=["session_id", "yad_no_cand"], right_on=["session_id", "yad_no"]).group_by(["session_id", "yad_no_cand"]).agg(pl.max("seq_no").alias("first_cand_appear_seq_in_log"))[["session_id", "yad_no_cand", "first_cand_appear_seq_in_log"]].fill_nan(30)
+
+    last_cand_appear_seq_in_log = df_candidate.join(
+        df_log, how="inner", left_on=["session_id", "yad_no_cand"], right_on=["session_id", "yad_no"]).group_by(["session_id", "yad_no_cand"]).agg(pl.min("seq_no").alias("last_cand_appear_seq_in_log"))[["session_id", "yad_no_cand", "last_cand_appear_seq_in_log"]].fill_nan(30)
+
+    df_candidate = df_candidate.join(
+        first_cand_appear_seq_in_log, how="left", on=["session_id", "yad_no_cand"]).with_columns(
+        pl.col("first_cand_appear_seq_in_log").cast(pl.Int8))
+
+    df_candidate = df_candidate.join(
+        last_cand_appear_seq_in_log, how="left", on=["session_id", "yad_no_cand"]).with_columns(
+        pl.col("last_cand_appear_seq_in_log").cast(pl.Int8))
+
+    del first_cand_appear_seq_in_log, last_cand_appear_seq_in_log
+    gc.collect()
+
+    # view number of candidate in log
+    view_num_of_cand_in_log = df_candidate[["session_id", "yad_no_cand"]].join(
+        df_log, how="inner", left_on=["session_id", "yad_no_cand"], right_on=["session_id", "yad_no"]).group_by(["session_id", "yad_no_cand"]).count().rename({"count": "view_num_of_cand_in_log"})
+
+    df_candidate = df_candidate.join(
+        view_num_of_cand_in_log, how="left", on=["session_id", "yad_no_cand"]).with_columns(
+        pl.col("view_num_of_cand_in_log").cast(pl.Int8))
+
+    # make feature in discussion
     feature_name_list = [
         'latest_next_booking_top20',
-        'past_view_yado',
         'top20_popular_yado',
         'top10_wid_popular_yado',
         'top10_ken_popular_yado',
@@ -239,12 +288,10 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
             else:
                 df_candidate = df_candidate.join(feature, how='left', left_on=[
                     'yad_no_cand'], right_on=['yad_no'])
+    df_candidate = df_candidate.drop(["wid_cd", "ken_cd", "lrg_cd", "sml_cd"])
 
     df_candidate = df_candidate.with_columns([
         pl.col("latest_next_booking_rank").cast(pl.Int8),
-        pl.col("max_seq_no").cast(pl.Int8),
-        pl.col("max_seq_no_diff").cast(pl.Int8),
-        pl.col("session_view_count").cast(pl.Int8),
         pl.col("popular_rank").cast(pl.Int16),
         pl.col("popular_wid_cd_rank").cast(pl.Int16),
         pl.col("popular_ken_cd_rank").cast(pl.Int16),
@@ -258,15 +305,15 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
 
     # drop many category columns
     cand_dont_drop_cols = [
-        'total_room_cnt', 'wireless_lan_flg', 'onsen_flg', 'kd_stn_5min', 'kd_bch_5min', 'kd_slp_5min', 'kd_conv_walk_5min']
+        'yad_type', 'total_room_cnt', 'wireless_lan_flg', 'onsen_flg', 'kd_stn_5min', 'kd_bch_5min', 'kd_slp_5min', 'kd_conv_walk_5min', 'wid_cd', 'ken_cd', 'lrg_cd']
 
     pivot_dont_drop_cols = [
-        "wid_cd_1", "ken_cd_1", "lrg_cd_1", 
+        "wid_cd_1", "ken_cd_1", "lrg_cd_1",
     ]
 
     for i in range(n_pivot):
         for col in df_yad.columns:
-            if col != "total_room_cnt" and f"{col}_{i+1}" not in pivot_dont_drop_cols and f"{col}_{i+1}" in df_candidate.columns:
+            if f"{col}_{i+1}" not in pivot_dont_drop_cols and f"{col}_{i+1}" in df_candidate.columns:
                 df_candidate = df_candidate.drop(f"{col}_{i+1}")
 
     for col in df_yad.columns:
@@ -277,9 +324,9 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
     #     ["wid_cd", "ken_cd", "lrg_cd", "sml_cd", ])
     # change to category
     df_candidate = df_candidate.with_columns([
-        pl.col("wid_cd").cast(pl.Categorical),
-        pl.col("ken_cd").cast(pl.Categorical),
-        pl.col("lrg_cd").cast(pl.Categorical),
+        pl.col("wid_cd_cand").cast(pl.Categorical),
+        pl.col("ken_cd_cand").cast(pl.Categorical),
+        pl.col("lrg_cd_cand").cast(pl.Categorical),
         pl.col("wid_cd_1").cast(pl.Categorical),
         pl.col("ken_cd_1").cast(pl.Categorical),
         pl.col("lrg_cd_1").cast(pl.Categorical),
@@ -291,12 +338,9 @@ def get_features(feature_list, df_yad, df_log, df_candidate, train_test="train",
         pl.col("kd_slp_5min_cand").cast(pl.Int8),
         pl.col("kd_conv_walk_5min_cand").cast(pl.Int8),
     ])
-    df_candidate = df_candidate.drop("sml_cd")
 
     if train_test == "train":
         df_candidate = df_candidate.drop("fold")
-
-    print(df_candidate.columns)
 
     return df_candidate
 
@@ -337,6 +381,14 @@ def make_feature_and_label(candidate_train_tstamp, candidate_test_tstamp, featue
         .sort("session_id", "yad_no_cand")
     )
 
+    null_columns = set([
+        col for col in features_train.columns if features_train[col].null_count() > 0])
+    null_columns_test = set([
+        col for col in features_test.columns if features_test[col].null_count() > 0])
+
+    print("null features", null_columns)
+    print("null features test", null_columns_test)
+    print(null_columns_test - null_columns)
     print(features_train.columns)
     features_train = features_train.lazy().sort(
         "session_id", "yad_no_cand").collect()

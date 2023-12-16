@@ -26,6 +26,7 @@ def create_past_view_yado_candidates(log):
     past_yado_feature = past_yado_feature.join(session_view_count, how='left', on=[
                                                'session_id', 'yad_no']).drop('seq_no')
 
+
     return past_yado_candidates, past_yado_feature
 
 
@@ -163,8 +164,8 @@ def create_latest_next_booking_topN_candidate(train_log, label, fold_num, train_
         latest_next_booking_topN_feature = (log_latest
                                             .group_by('latest_yad_no')
                                             .map_groups(lambda group: group.with_columns(pl.col('count').rank(method='dense', descending=True).over('latest_yad_no').alias(f'latest_next_booking_rank'))))
-    latest_next_booking_topN_feature = latest_next_booking_topN_feature.drop(
-        'count')
+    latest_next_booking_topN_feature = latest_next_booking_topN_feature.drop( 'count')
+
     return latest_next_booking_topN_candidate, latest_next_booking_topN_feature
 
 
@@ -384,4 +385,4 @@ if __name__ == '__main__':
     yado = loader.load_yado()
 
     make_candidate(train_log, test_log, label, yado)
-    candidate_20231211()
+    # candidate_20231211()

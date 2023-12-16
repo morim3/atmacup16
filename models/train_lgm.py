@@ -78,7 +78,7 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
     use_session_ids = y.filter(pl.col('label') == 1).unique(
         "session_id")['session_id']
 
-    for fold_id in range(n_fold):
+    for fold_id in range(1):
         print("fold: ", fold_id)
         # get train data
         # valid index is the index of y["fold"] is same as fold_id
@@ -124,7 +124,8 @@ def train_lgm(X, y, config, train_label, n_fold=5, seed=42, logger=None,):
         model = lgb.train(
             config["lgb_params"],
             train_data,
-            valid_sets=[valid_data],
+            valid_sets=[train_data, valid_data],
+            valid_names=['train', 'valid'],
             num_boost_round=config["num_boost_round"],
             callbacks=callbacks,
         )

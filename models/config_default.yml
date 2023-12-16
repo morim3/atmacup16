@@ -3,8 +3,7 @@ lgb_params:
   'objective': 'binary'
   'metric': 'auc'
   'boosting_type' : 'gbdt'
-  # 'seed': 42JJ 'learning_rate': 0.05
-  JJ'learning_rate': 0.1
+  'learning_rate': 0.1
   "max_depth": 7
   'bagging_freq': 1
   'bagging_fraction': 0.9

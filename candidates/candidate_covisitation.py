@@ -8,9 +8,9 @@ def generate_co_visit_matrix(df:pl.DataFrame) -> pl.DataFrame:
     df = df.join(df, on="session_id")
     # yad_noが同じものは除外する
     df = df.filter(pl.col("yad_no") != pl.col("yad_no_right"))
-    # yad_noのペアごとに共起回数を計算
+
     df = df.group_by(["yad_no", "yad_no_right"]).count()
-    # 整形
+
     df = df.rename(
         {
             "yad_no_right":"candidate_yad_no",
@@ -168,10 +168,36 @@ if __name__ == "__main__":
     train_co_visit_matrix = train_co_visit_matrix.rename({'yad_no':'latest_yad_no','candidate_yad_no':'yad_no'})
     test_co_visit_matrix = test_co_visit_matrix.rename({'yad_no':'latest_yad_no','candidate_yad_no':'yad_no'})
 
-    train_co_visit_matrix_top10_candidate = train_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(10)
-    test_co_visit_matrix_top10_candidate = test_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(10)
+    train_co_visit_matrix_top10_candidate = train_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(20)
+    test_co_visit_matrix_top10_candidate = test_co_visit_matrix.sort(['latest_yad_no','co_visit_count'],descending=[False,True]).group_by('latest_yad_no').head(20)
 
     print(train_co_visit_matrix_top10_candidate)
+
+    print(train_co_visit_matrix_top10_candidate.group_by("latest_yad_no").count().sort("count",).head(10))
+
+    #normalize by ranking
+    train_co_visit_matrix = (
+        train_co_visit_matrix
+        .sort(['co_visit_count'],descending=[False])
+        .with_columns(
+               (pl.col("co_visit_count").rank(method="ordinal") * 127 / train_co_visit_matrix.shape[0]).cast(pl.UInt8, strict=False)
+        )
+
+    )
+
+    test_co_visit_matrix = (
+        test_co_visit_matrix
+        .sort(['co_visit_count'],descending=[False])
+        .with_columns(
+                (pl.col("co_visit_count").rank(method="ordinal") * 127 / test_co_visit_matrix.shape[0]).cast(pl.UInt8, strict=False)
+        )
+    )
+
+    print(train_co_visit_matrix)
+        
+
+    print(train_co_visit_matrix.to_pandas().describe())
+    print(test_co_visit_matrix.to_pandas().describe())
 
     train_co_visit_matrix.write_parquet('data/features/train_covisit_features.parquet')
     test_co_visit_matrix.write_parquet('data/features/test_covisit_features.parquet')

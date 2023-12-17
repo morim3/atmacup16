@@ -8,9 +8,6 @@ import pickle
 
 
 def create_yad2vec_candidate(log, label=None, train_test="train", top=10):
-    """
-    アクセスした宿をcandidateとして作成。ただし、直近の宿は予約しないので除外する。
-    """
 
     # load word2vec models
     with open("data/item2vec/yad2vec_models.pickle", "rb") as f:

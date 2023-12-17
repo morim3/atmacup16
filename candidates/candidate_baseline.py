@@ -90,8 +90,7 @@ def create_topN_area_popular_yado_candidates(label, yado, fold_num, train_test='
                 by=[area, 'count'], descending=[False, True])
 
             # candidateの作成
-            top10_yado_area_candidate_fold = popular_yado_sort.group_by(area).head(
-                top).with_columns(pl.lit(fold).alias('fold')).select([area, 'yad_no', 'fold'])
+            top10_yado_area_candidate_fold = popular_yado_sort.group_by(area).head(top).with_columns(pl.lit(fold).alias('fold')).select([area, 'yad_no', 'fold'])
             top10_yado_area_candidate = pl.concat(
                 [top10_yado_area_candidate, top10_yado_area_candidate_fold])
 
@@ -176,34 +175,34 @@ def make_candidate(train_log, test_log, label, yado, fold_num=5):
     test_past_view_yado_candidates, test_past_view_yado_feature = create_past_view_yado_candidates(
         test_log)
     train_top20_popular_yado_candidates, train_top20_popular_yado_feature = create_topN_popular_yado_candidates(
-        label, fold_num=fold_num, train_test='train', top=20)
+        label, fold_num=fold_num, train_test='train', top=15)
     test_top20_popular_yado_candidates, test_top20_popular_yado_feature = create_topN_popular_yado_candidates(
-        label, fold_num=fold_num, train_test='test', top=20)
+        label, fold_num=fold_num, train_test='test', top=15)
 
     train_top10_wid_popular_yado_candidates, train_top10_wid_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='train', area='wid_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='train', area='wid_cd', top=15)
     test_top10_wid_popular_yado_candidates, test_top10_wid_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='test', area='wid_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='test', area='wid_cd', top=15)
 
     train_top10_ken_popular_yado_candidates, train_top10_ken_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='train', area='ken_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='train', area='ken_cd', top=15)
     test_top10_ken_popular_yado_candidates, test_top10_ken_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='test', area='ken_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='test', area='ken_cd', top=15)
 
     train_top10_lrg_popular_yado_candidates, train_top10_lrg_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='train', area='lrg_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='train', area='lrg_cd', top=15)
 
     test_top10_lrg_popular_yado_candidates, test_top10_lrg_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='test', area='lrg_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='test', area='lrg_cd', top=15)
 
     train_top10_sml_popular_yado_candidates, train_top10_sml_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='train', area='sml_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='train', area='sml_cd', top=15)
     test_top10_sml_popular_yado_candidates, test_top10_sml_popular_yado_feature = create_topN_area_popular_yado_candidates(
-        label, yado, fold_num=fold_num, train_test='test', area='sml_cd', top=10)
+        label, yado, fold_num=fold_num, train_test='test', area='sml_cd', top=15)
     train_latest_next_booking_top20_candidate, train_latest_next_booking_top20_feature = create_latest_next_booking_topN_candidate(
-        train_log, label, fold_num=fold_num, train_test='train', top=20)
+        train_log, label, fold_num=fold_num, train_test='train', top=15)
     test_latest_next_booking_top20_candidate, test_latest_next_booking_top20_feature = create_latest_next_booking_topN_candidate(
-        train_log, label, fold_num=fold_num, train_test='test', top=20)
+        train_log, label, fold_num=fold_num, train_test='test', top=15)
 
     # save all by .parquet
     train_past_view_yado_candidates.write_parquet(
